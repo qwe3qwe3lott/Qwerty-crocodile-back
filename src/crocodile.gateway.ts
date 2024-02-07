@@ -7,7 +7,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 
 type Client = Socket<DefaultEventsMap,DefaultEventsMap,DefaultEventsMap, {roomId?: string, userId?: string}>
 
-@WebSocketGateway(3001, {namespace: 'crocodile'})
+@WebSocketGateway(3001, {namespace: 'crocodile', cors: true})
 export class CrocodileGateway implements OnGatewayDisconnect {
   @WebSocketServer()
 	readonly server: Server;
