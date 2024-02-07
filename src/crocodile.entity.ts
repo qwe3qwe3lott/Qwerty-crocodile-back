@@ -10,7 +10,7 @@ type RoomSubscribes = {
 }
 
 export class Room {
-  private readonly id: string;
+  public readonly id: string;
   private readonly users: Map<string, User> = new Map();
   private readonly subscriptions: RoomSubscribes;
 
@@ -66,10 +66,6 @@ export class Room {
     return Array.from(this.users, ([, user]) => ({...user}));
   }
 }
-
-export type ResponseData<T extends Record<string, unknown> = Record<string, unknown>> = ({
-  _status: 'OK',
-} & T) | {_status: 'ERROR'}
 
 export type User = {
   id: string;
