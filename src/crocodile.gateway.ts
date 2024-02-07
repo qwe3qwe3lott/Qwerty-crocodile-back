@@ -1,9 +1,9 @@
 import { OnGatewayDisconnect, SubscribeMessage, WebSocketGateway, WebSocketServer } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import {  User } from './crocodile.entity';
 import { v4 as uuidv4 } from 'uuid';
 import { DefaultEventsMap } from 'socket.io/dist/typed-events';
 import { CrocodileService } from './crocodile.service';
+import { User } from './crocodile.entity';
 
 type ResponseData<TSuccess extends Record<string, unknown> = Record<string, unknown>, TError extends Record<string, unknown> = Record<string, unknown>> =
   ({ _status: 'OK' } & TSuccess) | ({ _status: 'ERROR' } & TError)
