@@ -13,10 +13,9 @@ type ServerToClientEvents = {
 }
 
 type ClientToServerEvents = {
-  createRoom: () => ResponseData<{roomId: string}>;
-  joinRoom: (payload: Partial<{roomId: string, userId: string, login: string}>) =>
-    ResponseData<{ userId: string, users: User[] }>
-  leaveRoom: () => ResponseData
+  createRoom: (payload: null, cb: (response: ResponseData<{roomId: string}>) => void) => void;
+  joinRoom: (payload: Partial<{roomId: string, userId: string, login: string}>, cb: (response: ResponseData<{ userId: string, users: User[] }>) => void) => void;
+  leaveRoom: (payload: null, cb: (response: ResponseData) => void) => void
 }
 
 type SocketData = {roomId?: string, userId?: string}
@@ -24,7 +23,7 @@ type SocketData = {roomId?: string, userId?: string}
 type ClientSocket = Socket<ClientToServerEvents, ServerToClientEvents, DefaultEventsMap, SocketData>;
 type ServerSocket = Server<ClientToServerEvents, ServerToClientEvents, DefaultEventsMap, SocketData>;
 
-type Response<K extends keyof ClientToServerEvents> = ReturnType<ClientToServerEvents[K]>;
+type Response<K extends keyof ClientToServerEvents> = Parameters<Parameters<ClientToServerEvents[K]>[1]>[0];
 type Payload<K extends keyof ClientToServerEvents> = Parameters<ClientToServerEvents[K]>[0];
 
 @WebSocketGateway(3001, {namespace: 'crocodile', cors: true})
