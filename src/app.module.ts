@@ -4,10 +4,9 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { CrocodileService } from './crocodile.service';
 
 @Module({
-  imports: [
-    ScheduleModule.forRoot()
-  ],
-  providers: [CrocodileGateway, CrocodileService],
+	imports: [
+		ScheduleModule.forRoot()
+	],
+	providers: [ CrocodileGateway, CrocodileService ],
 })
 export class AppModule {}
- 
