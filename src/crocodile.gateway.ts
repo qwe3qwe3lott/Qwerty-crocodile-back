@@ -10,13 +10,14 @@ type ResponseData<TSuccess extends Record<string, unknown> = Record<string, unkn
 
 type ServerToClientEvents = {
 	users: (users: User[]) => void;
+	ownerId: (ownerId: string) => void;
 };
 
 type ClientToServerEvents = {
 	createRoom: (payload: null, cb: (response: ResponseData<{ roomId: string }>) => void) => void;
 	joinRoom: (
 		payload: Partial<{ roomId: string, userId: string, login: string }>,
-		cb: (response: ResponseData<{ userId: string, users: User[] }>) => void
+		cb: (response: ResponseData<{ userId: string, users: User[], ownerId: string }>) => void
 	) => void;
 	leaveRoom: (payload: null, cb: (response: ResponseData) => void) => void
 };
@@ -60,6 +61,10 @@ export class CrocodileGateway implements OnGatewayDisconnect {
 			this.server.to(room.id).emit('users', room.getUsers());
 		});
 
+		room.on('ownerId', () => {
+			this.server.to(room.id).emit('ownerId', room.getOwnerId());
+		});
+
 		return { _status: 'OK', roomId: room.id };
 	}
 
@@ -78,8 +83,9 @@ export class CrocodileGateway implements OnGatewayDisconnect {
 		room.join({ login, id: userId });
 		await client.join(roomId);
 		const users = room.getUsers();
+		const ownerId = room.getOwnerId();
 
-		return { _status: 'OK', userId, users };
+		return { _status: 'OK', userId, users, ownerId };
 	}
 
 	@SubscribeMessage('leaveRoom')
