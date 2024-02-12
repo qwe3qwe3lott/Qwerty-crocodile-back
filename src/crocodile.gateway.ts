@@ -18,7 +18,7 @@ type ClientToServerEvents = {
 	createRoom: (payload: null, cb: (response: ResponseData<{ roomId: string }>) => void) => void;
 	joinRoom: (
 		payload: Partial<{ roomId: string, userId: string, login: string }>,
-		cb: (response: ResponseData<{ userId: string, users: User[], ownerId: string }>) => void
+		cb: (response: ResponseData<{ userId: string, users: User[], ownerId: string, drawEvents: DrawEvent[] }>) => void
 	) => void;
 	leaveRoom: (payload: null, cb: (response: ResponseData) => void) => void;
 	draw: (payload: DrawEvent[], cb: (response: ResponseData) => void) => void;
@@ -56,11 +56,11 @@ export class CrocodileGateway implements OnGatewayDisconnect {
 		const room = this.crocodileService.createRoom();
 
 		room.on('userJoined', () => {
-			this.server.to(room.id).emit('users', room.getUsers());
+			this.server.to(room.id).emit('users', room.users);
 		});
 
 		room.on('userLeaved', () => {
-			this.server.to(room.id).emit('users', room.getUsers());
+			this.server.to(room.id).emit('users', room.users);
 		});
 
 		room.on('ownerId', (ownerId) => {
@@ -92,10 +92,11 @@ export class CrocodileGateway implements OnGatewayDisconnect {
 		client.data.userId = userId;
 		room.join({ login, id: userId });
 		await client.join(roomId);
-		const users = room.getUsers();
-		const ownerId = room.getOwnerId();
+		const users = room.users;
+		const ownerId = room.ownerId;
+		const drawEvents: DrawEvent[] = [ { type: 'image', x: 0, y: 0, ...room.canvasImageData } ];
 
-		return { _status: 'OK', userId, users, ownerId };
+		return { _status: 'OK', userId, users, ownerId, drawEvents  };
 	}
 
 	@SubscribeMessage('leaveRoom')

@@ -11,7 +11,7 @@ export class CrocodileService {
 	@Cron(CronExpression.EVERY_10_MINUTES)
 	handleCron() {
 		for (const [ roomId,room ] of this.rooms) {
-			if (!room.isEmpty()) continue;
+			if (!room.isEmpty) continue;
 
 			const count = (this.emptyRoomChecks.get(room) ?? 0) + 1;
 

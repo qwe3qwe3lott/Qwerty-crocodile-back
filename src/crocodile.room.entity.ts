@@ -1,6 +1,6 @@
 import { DrawEvent, User } from './crocodile.entity';
 import { Emitter } from './crocodile.emitter';
-import { Canvas, CanvasRenderingContext2D } from 'canvas';
+import { Canvas, CanvasRenderingContext2D, ImageData } from 'canvas';
 
 export type RoomEventPayloadMap = {
 	userJoined: User;
@@ -15,9 +15,9 @@ export class Room {
 	static readonly WIDTH = 100;
 	static readonly HEIGHT = 141;
 
-	public readonly id: string;
-	private readonly users: Map<string, User> = new Map();
-	private ownerId: string;
+	public readonly _id: string;
+	private readonly _users: Map<string, User> = new Map();
+	private _ownerId: string;
 
 	private readonly emitter: Emitter<RoomEvent, RoomEventPayloadMap> = new Emitter();
 
@@ -26,8 +26,35 @@ export class Room {
 		return this.canvas.getContext('2d');
 	}
 
+	public get isEmpty(): boolean {
+		return this._users.size === 0;
+	}
+
+	public get users(): User[] {
+		return Array.from(this._users, ([ , user ]) => ({ ...user }));
+	}
+
+	public get ownerId(): string {
+		return this._ownerId;
+	}
+
+	public get id(): string {
+		return this._id;
+	}
+
+	public get canvasImageData(): { data: ArrayBuffer, height: number, width: number } {
+		return {
+			data: this.canvas.getContext('2d').getImageData(0, 0, this.canvas.width, this.canvas.height).data,
+			width: this.canvas.width,
+			height: this.canvas.height
+		};
+	}
+
 	constructor(id: string) {
-		this.id = id;
+		this._id = id;
+
+		this.canvasCtx.fillStyle = 'white';
+		this.canvasCtx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 	}
 
 	public on<Event extends RoomEvent = RoomEvent>(event: Event, callback: (payload: RoomEventPayloadMap[Event]) => void): () => void {
@@ -35,33 +62,33 @@ export class Room {
 	}
 
 	public join(user: User): void {
-		this.users.set(user.id, user);
+		this._users.set(user.id, user);
 
 		this.emitter.emit('userJoined', user);
 
 		if (!this.ownerId) {
-			this.ownerId = user.id;
+			this._ownerId = user.id;
 
 			this.emitter.emit('ownerId', user.id);
 		}
 	}
 
 	public leave(userId: string): boolean {
-		const user = this.users.get(userId);
+		const user = this._users.get(userId);
 
 		if (!user) return false;
 
-		this.users.delete(userId);
+		this._users.delete(userId);
 
 		this.emitter.emit('userLeaved', user);
 
 		if (userId === this.ownerId) {
-			if (this.users.size === 0) {
-				this.ownerId = '';
+			if (this._users.size === 0) {
+				this._ownerId = '';
 			} else {
-				const userIds = Array.from(this.users.keys());
+				const userIds = Array.from(this._users.keys());
 
-				this.ownerId = userIds[Math.floor(Math.random() * userIds.length)];
+				this._ownerId = userIds[Math.floor(Math.random() * userIds.length)];
 			}
 
 			this.emitter.emit('ownerId', this.ownerId);
@@ -97,26 +124,20 @@ export class Room {
 					this.canvasCtx.fillStyle = drawEvent.color;
 					this.canvasCtx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 					break;
+				case 'image': {
+					const buffer = new Uint8ClampedArray(drawEvent.data);
+					const imageData = new ImageData(buffer, drawEvent.width, drawEvent.height);
+					this.canvasCtx.putImageData(imageData, drawEvent.x, drawEvent.y);
+					break;
+				}
 			}
 		}
 
 		this.emitter.emit('drawEvents', { drawEvents, authorId });
 	}
 
-	public isEmpty(): boolean {
-		return this.users.size === 0;
-	}
-
 	public hasUser(userId: string): boolean {
-		return this.users.has(userId);
-	}
-
-	public getUsers(): User[] {
-		return Array.from(this.users, ([ , user ]) => ({ ...user }));
-	}
-
-	public getOwnerId(): string {
-		return this.ownerId;
+		return this._users.has(userId);
 	}
 
 	public destroy(): void {
