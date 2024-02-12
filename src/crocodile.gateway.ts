@@ -63,8 +63,16 @@ export class CrocodileGateway implements OnGatewayDisconnect {
 			this.server.to(room.id).emit('users', room.getUsers());
 		});
 
-		room.on('ownerId', () => {
-			this.server.to(room.id).emit('ownerId', room.getOwnerId());
+		room.on('ownerId', (ownerId) => {
+			this.server.to(room.id).emit('ownerId', ownerId);
+		});
+
+		room.on('drawEvents', async ({ drawEvents, authorId }) => {
+			const sockets = await this.server.to(room.id).fetchSockets();
+
+			for (const socket of sockets) {
+				socket.data.userId !== authorId && socket.emit('drawEvents', drawEvents);
+			}
 		});
 
 		return { _status: 'OK', roomId: room.id };
@@ -118,6 +126,8 @@ export class CrocodileGateway implements OnGatewayDisconnect {
 		const room = this.crocodileService.getRoom(roomId);
 
 		if (!room) return { _status: 'ERROR' };
+
+		room.draw(drawEvents, userId);
 
 		return { _status: 'OK' };
 	}
