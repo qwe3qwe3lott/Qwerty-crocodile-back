@@ -3,7 +3,7 @@ import { Server, Socket } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
 import { DefaultEventsMap } from 'socket.io/dist/typed-events';
 import { CrocodileService } from './crocodile.service';
-import { User } from './crocodile.entity';
+import { DrawEvent, User } from './crocodile.entity';
 
 type ResponseData<TSuccess extends Record<string, unknown> = Record<string, unknown>, TError extends Record<string, unknown> = Record<string, unknown>> =
   ({ _status: 'OK' } & TSuccess) | ({ _status: 'ERROR' } & TError);
@@ -11,6 +11,7 @@ type ResponseData<TSuccess extends Record<string, unknown> = Record<string, unkn
 type ServerToClientEvents = {
 	users: (users: User[]) => void;
 	ownerId: (ownerId: string) => void;
+	drawEvents: (drawEvents: DrawEvent[]) => void;
 };
 
 type ClientToServerEvents = {
@@ -19,7 +20,8 @@ type ClientToServerEvents = {
 		payload: Partial<{ roomId: string, userId: string, login: string }>,
 		cb: (response: ResponseData<{ userId: string, users: User[], ownerId: string }>) => void
 	) => void;
-	leaveRoom: (payload: null, cb: (response: ResponseData) => void) => void
+	leaveRoom: (payload: null, cb: (response: ResponseData) => void) => void;
+	draw: (payload: DrawEvent[], cb: (response: ResponseData) => void) => void;
 };
 
 type SocketData = { roomId?: string, userId?: string };
@@ -103,6 +105,19 @@ export class CrocodileGateway implements OnGatewayDisconnect {
 
 		delete client.data.roomId;
 		delete client.data.userId;
+
+		return { _status: 'OK' };
+	}
+
+	@SubscribeMessage('draw')
+	public draw(client: ClientSocket, drawEvents: Payload<'draw'>): Response<'draw'> {
+		const { roomId, userId } = client.data;
+
+		if (!roomId || !userId) return { _status: 'ERROR' };
+
+		const room = this.crocodileService.getRoom(roomId);
+
+		if (!room) return { _status: 'ERROR' };
 
 		return { _status: 'OK' };
 	}
