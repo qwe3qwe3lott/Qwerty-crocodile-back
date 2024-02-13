@@ -135,7 +135,7 @@ export class Room {
 
 		this.emitter.emit('drawEvents', { drawEvents, authorId });
 	}
-
+ 
 	public hasUser(userId: string): boolean {
 		return this._users.has(userId);
 	}
