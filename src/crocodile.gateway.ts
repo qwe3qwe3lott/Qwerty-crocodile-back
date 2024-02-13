@@ -3,25 +3,38 @@ import { Server, Socket } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
 import { DefaultEventsMap } from 'socket.io/dist/typed-events';
 import { CrocodileService } from './crocodile.service';
-import { DrawEvent, User } from './crocodile.entity';
+import { DrawEvent, Player, User } from './crocodile.entity';
+import { RoomState } from './crocodile.room.entity';
 
 type ResponseData<TSuccess extends Record<string, unknown> = Record<string, unknown>, TError extends Record<string, unknown> = Record<string, unknown>> =
   ({ _status: 'OK' } & TSuccess) | ({ _status: 'ERROR' } & TError);
+
+type StateTransaction = { state: 'idle' } | { state: 'round', players: Player[], artistId: string } | { state: 'timeout' };
 
 type ServerToClientEvents = {
 	users: (users: User[]) => void;
 	ownerId: (ownerId: string) => void;
 	drawEvents: (drawEvents: DrawEvent[]) => void;
+	stateTransaction: (transaction: StateTransaction) => void;
 };
 
 type ClientToServerEvents = {
 	createRoom: (payload: null, cb: (response: ResponseData<{ roomId: string }>) => void) => void;
 	joinRoom: (
 		payload: Partial<{ roomId: string, userId: string, login: string }>,
-		cb: (response: ResponseData<{ userId: string, users: User[], ownerId: string, drawEvents: DrawEvent[] }>) => void
+		cb: (response: ResponseData<{
+			userId: string,
+			users: User[],
+			ownerId: string,
+			drawEvents: DrawEvent[],
+			artistId: string,
+			state: RoomState,
+			players: Player[]
+		}>) => void
 	) => void;
 	leaveRoom: (payload: null, cb: (response: ResponseData) => void) => void;
 	draw: (payload: DrawEvent[], cb: (response: ResponseData) => void) => void;
+	start: (payload: null, cb: (response: ResponseData) => void) => void;
 };
 
 type SocketData = { roomId?: string, userId?: string };
@@ -63,16 +76,36 @@ export class CrocodileGateway implements OnGatewayDisconnect {
 			this.server.to(room.id).emit('users', room.users);
 		});
 
-		room.on('ownerId', (ownerId) => {
+		room.on('ownerIdIsChanged', (ownerId) => {
 			this.server.to(room.id).emit('ownerId', ownerId);
 		});
 
-		room.on('drawEvents', async ({ drawEvents, authorId }) => {
+		room.on('drawEventsAreAdded', async ({ drawEvents, artistId }) => {
 			const sockets = await this.server.to(room.id).fetchSockets();
 
 			for (const socket of sockets) {
-				socket.data.userId !== authorId && socket.emit('drawEvents', drawEvents);
+				socket.data.userId !== artistId && socket.emit('drawEvents', drawEvents);
 			}
+		});
+
+		room.on('stateIsChanged', (state) => {
+			const payload: StateTransaction = (() => {
+				switch (state) {
+					case 'idle': {
+						return { state };
+					}
+					case 'round': {
+						const players = room.players;
+						const artistId = room.artist?.id ?? '';
+						return { state, players, artistId };
+					}
+					case 'timeout': {
+						return { state };
+					}
+				}
+			})();
+
+			this.server.to(room.id).emit('stateTransaction', payload);
 		});
 
 		return { _status: 'OK', roomId: room.id };
@@ -84,7 +117,7 @@ export class CrocodileGateway implements OnGatewayDisconnect {
 
 		const room = this.crocodileService.getRoom(roomId);
 
-		if (!room || (!!userId && room.hasUser(userId))) return { _status: 'ERROR' };
+		if (!room || room.isFull || (!!userId && room.hasUser(userId))) return { _status: 'ERROR' };
 
 		if (!userId) userId = uuidv4();
 
@@ -95,8 +128,11 @@ export class CrocodileGateway implements OnGatewayDisconnect {
 		const users = room.users;
 		const ownerId = room.ownerId;
 		const drawEvents: DrawEvent[] = [ { type: 'image', x: 0, y: 0, ...room.canvasImageData } ];
+		const artistId = room.artist?.id ?? '';
+		const state = room.state;
+		const players = room.players;
 
-		return { _status: 'OK', userId, users, ownerId, drawEvents  };
+		return { _status: 'OK', userId, users, ownerId, drawEvents, artistId, state, players  };
 	}
 
 	@SubscribeMessage('leaveRoom')
@@ -129,6 +165,21 @@ export class CrocodileGateway implements OnGatewayDisconnect {
 		if (!room) return { _status: 'ERROR' };
 
 		room.draw(drawEvents, userId);
+
+		return { _status: 'OK' };
+	}
+
+	@SubscribeMessage('start')
+	public start(client: ClientSocket): Response<'start'> {
+		const { roomId, userId } = client.data;
+
+		if (!roomId || !userId) return { _status: 'ERROR' };
+
+		const room = this.crocodileService.getRoom(roomId);
+
+		if (!room || room.users.length < 2 || room.ownerId !== userId) return { _status: 'ERROR' };
+
+		room.start();
 
 		return { _status: 'OK' };
 	}

@@ -1,37 +1,65 @@
-import { DrawEvent, User } from './crocodile.entity';
+import { DrawEvent, Player, User } from './crocodile.entity';
 import { Emitter } from './crocodile.emitter';
 import { Canvas, CanvasRenderingContext2D, ImageData } from 'canvas';
 
 export type RoomEventPayloadMap = {
 	userJoined: User;
 	userLeaved: User;
-	ownerId: string;
-	drawEvents: { drawEvents: DrawEvent[], authorId: string };
+	ownerIdIsChanged: string;
+	drawEventsAreAdded: { drawEvents: DrawEvent[], artistId: string };
+	stateIsChanged: RoomState;
 };
 
 export type RoomEvent = keyof RoomEventPayloadMap;
 
-export class Room {
-	static readonly WIDTH = 100;
-	static readonly HEIGHT = 141;
+export type RoomState = 'idle' | 'round' | 'timeout';
 
-	public readonly _id: string;
+export class Room {
+	private static readonly CANVAS_WIDTH = 100;
+	private static readonly CANVAS_HEIGHT = 141;
+	private static readonly MAX_USERS = 16;
+
+	private readonly _id: string;
 	private readonly _users: Map<string, User> = new Map();
 	private _ownerId: string;
+	private _state: RoomState = 'idle';
+
+	private playersQueue: Player[] = [];
+	private roundNumber = 0;
 
 	private readonly emitter: Emitter<RoomEvent, RoomEventPayloadMap> = new Emitter();
 
-	private canvas: Canvas = new Canvas(Room.WIDTH, Room.HEIGHT, 'image');
+	private canvas: Canvas = new Canvas(Room.CANVAS_WIDTH, Room.CANVAS_HEIGHT, 'image');
 	private get canvasCtx(): CanvasRenderingContext2D {
 		return this.canvas.getContext('2d');
+	}
+
+	public get isRunning(): boolean {
+		return this._state === 'round' || this._state === 'timeout';
+	}
+
+	public get state(): RoomState {
+		return this._state;
+	}
+
+	public get artist(): Player | null {
+		return this.playersQueue[this.roundNumber-1] ?? null;
 	}
 
 	public get isEmpty(): boolean {
 		return this._users.size === 0;
 	}
 
+	public get isFull(): boolean {
+		return this._users.size >= Room.MAX_USERS;
+	}
+
 	public get users(): User[] {
 		return Array.from(this._users, ([ , user ]) => ({ ...user }));
+	}
+
+	public get players(): Player[] {
+		return this.playersQueue;
 	}
 
 	public get ownerId(): string {
@@ -69,7 +97,7 @@ export class Room {
 		if (!this.ownerId) {
 			this._ownerId = user.id;
 
-			this.emitter.emit('ownerId', user.id);
+			this.emitter.emit('ownerIdIsChanged', user.id);
 		}
 	}
 
@@ -91,13 +119,13 @@ export class Room {
 				this._ownerId = userIds[Math.floor(Math.random() * userIds.length)];
 			}
 
-			this.emitter.emit('ownerId', this.ownerId);
+			this.emitter.emit('ownerIdIsChanged', this.ownerId);
 		}
 
 		return true;
 	}
 
-	public draw(drawEvents: DrawEvent[], authorId: string) {
+	public draw(drawEvents: DrawEvent[], artistId: string) {
 		for (const drawEvent of drawEvents) {
 			switch (drawEvent.type) {
 				case 'line':
@@ -133,7 +161,38 @@ export class Room {
 			}
 		}
 
-		this.emitter.emit('drawEvents', { drawEvents, authorId });
+		this.emitter.emit('drawEventsAreAdded', { drawEvents, artistId });
+	}
+
+	public start(): void {
+		this.toState('round');
+	}
+
+	private toState(state: RoomState): void {
+		switch (state) {
+			case 'idle': {
+				this.playersQueue = [];
+				this.roundNumber = 0;
+				this.draw([ { type: 'fill', color: 'white' } ], '');
+				this._state = state;
+				break;
+			}
+			case 'round': {
+				if (this.roundNumber === 0) {
+					this.playersQueue = Array.from(this._users).map(([ ,user ]) => ({ id: user.id, login: user.login }));
+				}
+				this.roundNumber += 1;
+				this.draw([ { type: 'fill', color: 'white' } ], '');
+				this._state = state;
+				break;
+			}
+			case 'timeout': {
+				this._state = state;
+				break;
+			}
+		}
+
+		this.emitter.emit('stateIsChanged', state);
 	}
  
 	public hasUser(userId: string): boolean {
