@@ -1,6 +1,7 @@
 import { DrawEvent, Player, User } from './crocodile.entity';
 import { Emitter } from './crocodile.emitter';
 import { Canvas, CanvasRenderingContext2D, ImageData } from 'canvas';
+import { getRandomArrayElement, shuffleArray } from './app.util';
 
 export type RoomEventPayloadMap = {
 	userJoined: User;
@@ -116,7 +117,7 @@ export class Room {
 			} else {
 				const userIds = Array.from(this._users.keys());
 
-				this._ownerId = userIds[Math.floor(Math.random() * userIds.length)];
+				this._ownerId = getRandomArrayElement(userIds) ?? '';
 			}
 
 			this.emitter.emit('ownerIdIsChanged', this.ownerId);
@@ -179,7 +180,7 @@ export class Room {
 			}
 			case 'round': {
 				if (this.roundNumber === 0) {
-					this.playersQueue = Array.from(this._users).map(([ ,user ]) => ({ id: user.id, login: user.login }));
+					this.playersQueue = shuffleArray(Array.from(this._users).map(([ ,user ]) => ({ id: user.id, login: user.login })));
 				}
 				this.roundNumber += 1;
 				this.draw([ { type: 'fill', color: 'white' } ], '');
