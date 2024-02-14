@@ -1,6 +1,6 @@
 module.exports = {
 	env: {
-		browser: true,
+		node: true,
 		es2021: true,
 	},
 	overrides: [
@@ -20,10 +20,9 @@ module.exports = {
 	extends: [ 'eslint:recommended', 'plugin:@typescript-eslint/recommended' ],
 	rules: {
 		'@stylistic/indent': [ 'error', 'tab' ],
-		'@stylistic/linebreak-style': [ 'error', 'unix' ],
+		'@stylistic/linebreak-style': [ 'error', 'windows' ],
 		'@stylistic/quotes': [ 'error', 'single' ],
 		'@stylistic/semi': [ 'error', 'always' ],
-		'@stylistic/jsx-indent': [ 'error', 'tab' ],
 		'@stylistic/object-curly-spacing': [ 'error', 'always' ],
 		'@stylistic/array-bracket-spacing': [ 'error', 'always' ],
 		'@stylistic/arrow-parens': [ 'error', 'always' ],
@@ -32,6 +31,21 @@ module.exports = {
 		'@stylistic/brace-style': [ 'error', '1tbs', { allowSingleLine: true } ],
 		'@stylistic/comma-dangle': [ 'error', 'only-multiline' ],
 		'@stylistic/max-len': [ 'error', { 'code': 160, tabWidth: 4 } ],
-		'@stylistic/no-multiple-empty-lines': [ 'error', { max: 1, maxEOF: 0, maxBOF: 0 } ]
+		'@stylistic/no-multiple-empty-lines': [ 'error', { max: 1, maxEOF: 0, maxBOF: 0 } ],
+		'@stylistic/jsx-closing-bracket-location': [ 'error' ],
+		'@stylistic/jsx-closing-tag-location': [ 'error' ],
+		'@stylistic/jsx-wrap-multilines': [ 'error', {
+			declaration: 'parens-new-line',
+			assignment: 'parens-new-line',
+			return: 'parens-new-line',
+			arrow: 'parens-new-line',
+			condition: 'parens-new-line',
+			logical: 'parens-new-line',
+			prop: 'parens-new-line'
+		} ],
+		'@stylistic/jsx-max-props-per-line': [ 'error', { maximum: 1, when: 'always' } ],
+		'@stylistic/jsx-indent': [ 'error', 'tab' ],
+		'@stylistic/jsx-indent-props': [ 'error', 'tab' ],
+		'@stylistic/jsx-first-prop-new-line': [ 'error', 'multiline' ],
 	},
 };
