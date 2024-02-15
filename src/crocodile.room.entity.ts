@@ -169,6 +169,10 @@ export class Room {
 		this.toState('round');
 	}
 
+	public stop(): void {
+		this.toState('idle');
+	}
+
 	private toState(state: RoomState): void {
 		switch (state) {
 			case 'idle': {

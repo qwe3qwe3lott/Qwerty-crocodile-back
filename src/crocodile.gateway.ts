@@ -35,6 +35,7 @@ type ClientToServerEvents = {
 	leaveRoom: (payload: null, cb: (response: ResponseData) => void) => void;
 	draw: (payload: DrawEvent[], cb: (response: ResponseData) => void) => void;
 	start: (payload: null, cb: (response: ResponseData) => void) => void;
+	stop: (payload: null, cb: (response: ResponseData) => void) => void;
 };
 
 type SocketData = { roomId?: string, userId?: string };
@@ -177,9 +178,24 @@ export class CrocodileGateway implements OnGatewayDisconnect {
 
 		const room = this.crocodileService.getRoom(roomId);
 
-		if (!room || room.users.length < 2 || room.ownerId !== userId) return { _status: 'ERROR' };
+		if (!room || room.users.length < 2 || room.isRunning || room.ownerId !== userId) return { _status: 'ERROR' };
 
 		room.start();
+
+		return { _status: 'OK' };
+	}
+
+	@SubscribeMessage('stop')
+	public stop(client: ClientSocket): Response<'start'> {
+		const { roomId, userId } = client.data;
+
+		if (!roomId || !userId) return { _status: 'ERROR' };
+
+		const room = this.crocodileService.getRoom(roomId);
+
+		if (!room || !room.isRunning || room.ownerId !== userId) return { _status: 'ERROR' };
+
+		room.stop();
 
 		return { _status: 'OK' };
 	}
