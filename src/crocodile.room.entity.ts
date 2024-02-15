@@ -2,6 +2,7 @@ import { DrawEvent, Player, User } from './crocodile.entity';
 import { Emitter } from './crocodile.emitter';
 import { Canvas, CanvasRenderingContext2D, ImageData } from 'canvas';
 import { getRandomArrayElement, shuffleArray } from './app.util';
+import { Timer } from './crocodile.timer';
 
 export type RoomEventPayloadMap = {
 	userJoined: User;
@@ -19,6 +20,8 @@ export class Room {
 	private static readonly CANVAS_WIDTH = 100;
 	private static readonly CANVAS_HEIGHT = 141;
 	private static readonly MAX_USERS = 16;
+	private static readonly ROUND_TIME = 10_000;
+	private static readonly TIMEOUT_TIME = 5_000;
 
 	private readonly _id: string;
 	private readonly _users: Map<string, User> = new Map();
@@ -29,47 +32,28 @@ export class Room {
 	private roundNumber = 0;
 
 	private readonly emitter: Emitter<RoomEvent, RoomEventPayloadMap> = new Emitter();
+	private readonly timer: Timer = new Timer();
 
 	private canvas: Canvas = new Canvas(Room.CANVAS_WIDTH, Room.CANVAS_HEIGHT, 'image');
-	private get canvasCtx(): CanvasRenderingContext2D {
-		return this.canvas.getContext('2d');
-	}
+	private get canvasCtx(): CanvasRenderingContext2D { return this.canvas.getContext('2d'); }
 
-	public get isRunning(): boolean {
-		return this._state === 'round' || this._state === 'timeout';
-	}
+	public get isRunning(): boolean { return this._state === 'round' || this._state === 'timeout'; }
 
-	public get state(): RoomState {
-		return this._state;
-	}
+	public get state(): RoomState { return this._state; }
 
-	public get artist(): Player | null {
-		return this.playersQueue[this.roundNumber-1] ?? null;
-	}
+	public get artist(): Player | null { return this.playersQueue[this.roundNumber-1] ?? null; }
 
-	public get isEmpty(): boolean {
-		return this._users.size === 0;
-	}
+	public get isEmpty(): boolean { return this._users.size === 0; }
 
-	public get isFull(): boolean {
-		return this._users.size >= Room.MAX_USERS;
-	}
+	public get isFull(): boolean { return this._users.size >= Room.MAX_USERS; }
 
-	public get users(): User[] {
-		return Array.from(this._users, ([ , user ]) => ({ ...user }));
-	}
+	public get users(): User[] { return Array.from(this._users, ([ , user ]) => ({ ...user })); }
 
-	public get players(): Player[] {
-		return this.playersQueue;
-	}
+	public get players(): Player[] { return this.playersQueue; }
 
-	public get ownerId(): string {
-		return this._ownerId;
-	}
+	public get ownerId(): string { return this._ownerId; }
 
-	public get id(): string {
-		return this._id;
-	}
+	public get id(): string { return this._id; }
 
 	public get canvasImageData(): { data: ArrayBuffer, height: number, width: number } {
 		return {
@@ -176,6 +160,7 @@ export class Room {
 	private toState(state: RoomState): void {
 		switch (state) {
 			case 'idle': {
+				this.timer.stop();
 				this.playersQueue = [];
 				this.roundNumber = 0;
 				this.draw([ { type: 'fill', color: 'white' } ], '');
@@ -189,10 +174,17 @@ export class Room {
 				this.roundNumber += 1;
 				this.draw([ { type: 'fill', color: 'white' } ], '');
 				this._state = state;
+				this.timer.start(Room.ROUND_TIME, () => {
+					this.toState('timeout');
+				});
 				break;
 			}
 			case 'timeout': {
 				this._state = state;
+				this.timer.start(Room.TIMEOUT_TIME, () => {
+					if (this.roundNumber >= this.playersQueue.length) this.toState('idle');
+					else this.toState('round');
+				});
 				break;
 			}
 		}
