@@ -1,4 +1,4 @@
-import { DrawEvent, Player, User } from './crocodile.entity';
+import { DrawEvent, Player, TimerState, User } from './crocodile.entity';
 import { Emitter } from './crocodile.emitter';
 import { Canvas, CanvasRenderingContext2D, ImageData } from 'canvas';
 import { getRandomArrayElement, shuffleArray } from './app.util';
@@ -54,6 +54,8 @@ export class Room {
 	public get ownerId(): string { return this._ownerId; }
 
 	public get id(): string { return this._id; }
+
+	public get timerState(): TimerState | null { return this.timer.state; }
 
 	public get canvasImageData(): { data: ArrayBuffer, height: number, width: number } {
 		return {

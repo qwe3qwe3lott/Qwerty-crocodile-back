@@ -3,13 +3,16 @@ import { Server, Socket } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
 import { DefaultEventsMap } from 'socket.io/dist/typed-events';
 import { CrocodileService } from './crocodile.service';
-import { DrawEvent, Player, User } from './crocodile.entity';
+import { DrawEvent, Player, TimerState, User } from './crocodile.entity';
 import { RoomState } from './crocodile.room.entity';
 
 type ResponseData<TSuccess extends Record<string, unknown> = Record<string, unknown>, TError extends Record<string, unknown> = Record<string, unknown>> =
   ({ _status: 'OK' } & TSuccess) | ({ _status: 'ERROR' } & TError);
 
-type StateTransaction = { state: 'idle' } | { state: 'round', players: Player[], artistId: string } | { state: 'timeout' };
+type StateTransaction =
+	{ state: 'idle' } |
+	{ state: 'round', timerState: TimerState | null, players: Player[], artistId: string } |
+	{ state: 'timeout', timerState: TimerState | null };
 
 type ServerToClientEvents = {
 	users: (users: User[]) => void;
@@ -29,7 +32,8 @@ type ClientToServerEvents = {
 			drawEvents: DrawEvent[],
 			artistId: string,
 			state: RoomState,
-			players: Player[]
+			players: Player[],
+			timerState: TimerState | null
 		}>) => void
 	) => void;
 	leaveRoom: (payload: null, cb: (response: ResponseData) => void) => void;
@@ -98,10 +102,12 @@ export class CrocodileGateway implements OnGatewayDisconnect {
 					case 'round': {
 						const players = room.players;
 						const artistId = room.artist?.id ?? '';
-						return { state, players, artistId };
+						const timerState = room.timerState;
+						return { state, players, artistId, timerState };
 					}
 					case 'timeout': {
-						return { state };
+						const timerState = room.timerState;
+						return { state, timerState };
 					}
 				}
 			})();
@@ -132,8 +138,9 @@ export class CrocodileGateway implements OnGatewayDisconnect {
 		const artistId = room.artist?.id ?? '';
 		const state = room.state;
 		const players = room.players;
+		const timerState = room.timerState;
 
-		return { _status: 'OK', userId, users, ownerId, drawEvents, artistId, state, players  };
+		return { _status: 'OK', userId, users, ownerId, drawEvents, artistId, state, players, timerState };
 	}
 
 	@SubscribeMessage('leaveRoom')

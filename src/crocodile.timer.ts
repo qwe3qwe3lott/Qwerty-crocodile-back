@@ -1,36 +1,34 @@
-export type TimerState = 'idle' | 'running';
+import { TimerState } from './crocodile.entity';
 
 export class Timer {
-	private _state: TimerState = 'idle';
-	private _startUTCMs: number = NaN;
+	private _state: TimerState | null = null;
 	private _timeout: ReturnType<typeof setTimeout> | null = null;
 
-	public get leftTime(): number { return new Date().getTime() - NaN; }
+	public get state(): TimerState | null { return this._state; }
 
-	public get isRunning(): boolean { return this._state === 'running'; }
+	public get isRunning(): boolean { return !!this._state; }
 
-	public start(ms: number, cb: () => void): void {
+	public start(duration: number, cb: () => void): void {
 		if (this.isRunning) this.stop();
 
-		this._startUTCMs = new Date().getTime();
-		this._state = 'running';
+		this._state = {
+			startTime: new Date().getTime(),
+			duration
+		};
 
 		this._timeout = setTimeout(() => {
-			this._state = 'idle';
-			this._startUTCMs = NaN;
+			this._state = null;
 			this._timeout = null;
 
 			cb();
-		}, ms);
+		}, duration);
 	}
 
 	public stop(): void {
+		this._state = null;
+
 		if (!this._timeout) return;
 
 		clearTimeout(this._timeout);
-
-		this._startUTCMs = NaN;
-		this._state = 'idle';
-		this._timeout = null;
 	}
 }
