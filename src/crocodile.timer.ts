@@ -13,7 +13,7 @@ export class Timer {
 
 		this._state = {
 			startTime: new Date().getTime(),
-			duration
+			duration,
 		};
 
 		this._timeout = setTimeout(() => {

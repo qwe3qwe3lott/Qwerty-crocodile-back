@@ -5,7 +5,7 @@ import { CrocodileService } from './crocodile.service';
 
 @Module({
 	imports: [
-		ScheduleModule.forRoot()
+		ScheduleModule.forRoot(),
 	],
 	providers: [ CrocodileGateway, CrocodileService ],
 })

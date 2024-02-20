@@ -20,7 +20,7 @@ export class Room {
 	private static readonly CANVAS_WIDTH = 100;
 	private static readonly CANVAS_HEIGHT = 141;
 	private static readonly MAX_USERS = 16;
-	private static readonly ROUND_TIME = 10_000;
+	private static readonly ROUND_TIME = 30_000;
 	private static readonly TIMEOUT_TIME = 5_000;
 
 	private readonly _id: string;
@@ -61,7 +61,7 @@ export class Room {
 		return {
 			data: this.canvas.getContext('2d').getImageData(0, 0, this.canvas.width, this.canvas.height).data,
 			width: this.canvas.width,
-			height: this.canvas.height
+			height: this.canvas.height,
 		};
 	}
 
