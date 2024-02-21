@@ -1,8 +1,9 @@
-import { DrawEvent, Player, TimerState, User } from './crocodile.entity';
+import { Answer, AnswerAdapter, DrawEvent, Player, TimerState, User } from './crocodile.entity';
 import { Emitter } from './crocodile.emitter';
 import { Canvas, CanvasRenderingContext2D, ImageData } from 'canvas';
 import { getRandomArrayElement, shuffleArray } from './app.util';
 import { Timer } from './crocodile.timer';
+import { ShikimoriAnswerAdapter } from './crocodile.shikimori.adapter';
 
 export type RoomEventPayloadMap = {
 	userJoined: User;
@@ -10,6 +11,7 @@ export type RoomEventPayloadMap = {
 	ownerIdIsChanged: string;
 	drawEventsAreAdded: { drawEvents: DrawEvent[], artistId: string };
 	stateIsChanged: RoomState;
+	playersAreChanged: Player[];
 };
 
 export type RoomEvent = keyof RoomEventPayloadMap;
@@ -20,19 +22,21 @@ export class Room {
 	private static readonly CANVAS_WIDTH = 100;
 	private static readonly CANVAS_HEIGHT = 141;
 	private static readonly MAX_USERS = 16;
-	private static readonly ROUND_TIME = 30_000;
+	private static readonly ROUND_TIME = 120_000;
 	private static readonly TIMEOUT_TIME = 5_000;
 
 	private readonly _id: string;
 	private readonly _users: Map<string, User> = new Map();
 	private _ownerId: string;
 	private _state: RoomState = 'idle';
+	private _answer: Answer | null;
 
 	private playersQueue: Player[] = [];
 	private roundNumber = 0;
 
 	private readonly emitter: Emitter<RoomEvent, RoomEventPayloadMap> = new Emitter();
 	private readonly timer: Timer = new Timer();
+	private readonly answerAdapter: AnswerAdapter = new ShikimoriAnswerAdapter();
 
 	private canvas: Canvas = new Canvas(Room.CANVAS_WIDTH, Room.CANVAS_HEIGHT, 'image');
 	private get canvasCtx(): CanvasRenderingContext2D { return this.canvas.getContext('2d'); }
@@ -56,6 +60,7 @@ export class Room {
 	public get id(): string { return this._id; }
 
 	public get timerState(): TimerState | null { return this.timer.state; }
+	public get answer(): Answer | null { return this._answer; }
 
 	public get canvasImageData(): { data: ArrayBuffer, height: number, width: number } {
 		return {
@@ -159,10 +164,12 @@ export class Room {
 		this.toState('idle');
 	}
 
-	private toState(state: RoomState): void {
+	private async toState(state: RoomState): Promise<void> {
+		this.timer.stop();
+
 		switch (state) {
 			case 'idle': {
-				this.timer.stop();
+				this._answer = null;
 				this.playersQueue = [];
 				this.roundNumber = 0;
 				this.draw([ { type: 'fill', color: 'white' } ], '');
@@ -171,10 +178,18 @@ export class Room {
 			}
 			case 'round': {
 				if (this.roundNumber === 0) {
-					this.playersQueue = shuffleArray(Array.from(this._users).map(([ ,user ]) => ({ id: user.id, login: user.login })));
+					this.playersQueue = shuffleArray(Array.from(this._users).map(([ ,user ]) => ({ id: user.id, login: user.login, points: 0 })));
+				}
+				for (const player of this.playersQueue) {
+					delete player.hasRightAnswer;
 				}
 				this.roundNumber += 1;
 				this.draw([ { type: 'fill', color: 'white' } ], '');
+				this._answer = await this.answerAdapter.fetchAnswer();
+				if (!this._answer) {
+					this.toState('idle');
+					return;
+				}
 				this._state = state;
 				this.timer.start(Room.ROUND_TIME, () => {
 					this.toState('timeout');
@@ -193,9 +208,33 @@ export class Room {
 
 		this.emitter.emit('stateIsChanged', state);
 	}
+
+	public applyAnswer(answer: string, playerId: string): boolean {
+		if (answer !== this._answer?.value) return false;
+
+		const player = this.playersQueue.find((player) => player.id === playerId);
+
+		if (!player || player.hasRightAnswer) return false;
+
+		player.hasRightAnswer = true;
+
+		player.points += 1;
+
+		this.emitter.emit('playersAreChanged', this.playersQueue);
+
+		if (this.playersQueue.filter((player) => player.hasRightAnswer).length >= this.playersQueue.length - 1) {
+			this.toState('timeout');
+		}
+
+		return true;
+	}
  
 	public hasUser(userId: string): boolean {
 		return this._users.has(userId);
+	}
+
+	public hasPlayer(playerId: string): boolean {
+		return this.playersQueue.some((player) => player.id === playerId);
 	}
 
 	public destroy(): void {

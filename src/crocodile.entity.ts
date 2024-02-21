@@ -6,6 +6,8 @@ export type User = {
 export type Player = {
 	id: string;
 	login: string;
+	points: number;
+	hasRightAnswer?: true;
 };
 
 export type DrawEvent =
@@ -18,3 +20,13 @@ export type TimerState = {
 	startTime: number;
 	duration: number;
 };
+
+export type Answer = {
+	label: string;
+	posterUrl: string;
+	value: string;
+};
+
+export interface AnswerAdapter {
+	fetchAnswer(): Promise<Answer | null>;
+}

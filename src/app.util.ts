@@ -1,8 +1,8 @@
-export const getRandomArrayElement = <T, A extends Array<T>>(array: A): T | undefined => {
+export const getRandomArrayElement = <T>(array: Array<T>): T | undefined => {
 	return array[Math.floor(Math.random() * array.length)];
 };
 
-export const shuffleArray = <T, A extends Array<T>>(array: A): A => {
+export const shuffleArray = <T>(array: Array<T>): Array<T> => {
 	let currentIndex = array.length, randomIndex: number;
 
 	while (currentIndex > 0) {

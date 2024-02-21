@@ -3,7 +3,7 @@ import { Server, Socket } from 'socket.io';
 import { v4 as uuidv4 } from 'uuid';
 import { DefaultEventsMap } from 'socket.io/dist/typed-events';
 import { CrocodileService } from './crocodile.service';
-import { DrawEvent, Player, TimerState, User } from './crocodile.entity';
+import { Answer, DrawEvent, Player, TimerState, User } from './crocodile.entity';
 import { RoomState } from './crocodile.room.entity';
 
 type ResponseData<TSuccess extends Record<string, unknown> = Record<string, unknown>, TError extends Record<string, unknown> = Record<string, unknown>> =
@@ -11,14 +11,15 @@ type ResponseData<TSuccess extends Record<string, unknown> = Record<string, unkn
 
 type StateTransaction =
 	{ state: 'idle' } |
-	{ state: 'round', timerState: TimerState | null, players: Player[], artistId: string } |
-	{ state: 'timeout', timerState: TimerState | null };
+	{ state: 'round', timerState: TimerState | null, players: Player[], artistId: string, answer: Answer | null } |
+	{ state: 'timeout', timerState: TimerState | null, answer: Answer | null };
 
 type ServerToClientEvents = {
 	users: (users: User[]) => void;
 	ownerId: (ownerId: string) => void;
 	drawEvents: (drawEvents: DrawEvent[]) => void;
 	stateTransaction: (transaction: StateTransaction) => void;
+	players: (players: Player[]) => void;
 };
 
 type ClientToServerEvents = {
@@ -33,13 +34,15 @@ type ClientToServerEvents = {
 			artistId: string,
 			state: RoomState,
 			players: Player[],
-			timerState: TimerState | null
+			timerState: TimerState | null,
+			answer: Answer | null,
 		}>) => void
 	) => void;
 	leaveRoom: (payload: null, cb: (response: ResponseData) => void) => void;
 	draw: (payload: DrawEvent[], cb: (response: ResponseData) => void) => void;
 	start: (payload: null, cb: (response: ResponseData) => void) => void;
 	stop: (payload: null, cb: (response: ResponseData) => void) => void;
+	answer: (payload: string | undefined, cb: (response: ResponseData<{ isRight: boolean }>) => void) => void;
 };
 
 type SocketData = { roomId?: string, userId?: string };
@@ -85,6 +88,10 @@ export class CrocodileGateway implements OnGatewayDisconnect {
 			this.server.to(room.id).emit('ownerId', ownerId);
 		});
 
+		room.on('playersAreChanged', (players) => {
+			this.server.to(room.id).emit('players', players);
+		});
+
 		room.on('drawEventsAreAdded', async ({ drawEvents, artistId }) => {
 			const sockets = await this.server.to(room.id).fetchSockets();
 
@@ -93,26 +100,41 @@ export class CrocodileGateway implements OnGatewayDisconnect {
 			}
 		});
 
-		room.on('stateIsChanged', (state) => {
-			const payload: StateTransaction = (() => {
-				switch (state) {
-					case 'idle': {
-						return { state };
-					}
-					case 'round': {
-						const players = room.players;
-						const artistId = room.artist?.id ?? '';
-						const timerState = room.timerState;
-						return { state, players, artistId, timerState };
-					}
-					case 'timeout': {
-						const timerState = room.timerState;
-						return { state, timerState };
-					}
-				}
-			})();
+		room.on('stateIsChanged', async (state) => {
+			switch (state) {
+				case 'idle': {
+					const payload = { state };
 
-			this.server.to(room.id).emit('stateTransaction', payload);
+					this.server.to(room.id).emit('stateTransaction', payload);
+
+					break;
+				}
+				case 'round': {
+					const players = room.players;
+					const artistId = room.artist?.id ?? '';
+					const timerState = room.timerState;
+					const answer = null;
+					const payload = { state, players, artistId, timerState, answer };
+
+					const sockets = await this.server.to(room.id).fetchSockets();
+
+					for (const socket of sockets) {
+						if (socket.data.userId !== room.artist?.id) socket.emit('stateTransaction', payload);
+						else socket.emit('stateTransaction', { ...payload, answer: room.answer });
+					}
+
+					break;
+				}
+				case 'timeout': {
+					const timerState = room.timerState;
+					const answer = room.answer;
+					const payload = { state, timerState, answer };
+
+					this.server.to(room.id).emit('stateTransaction', payload);
+
+					break;
+				}
+			}
 		});
 
 		return { _status: 'OK', roomId: room.id };
@@ -139,8 +161,9 @@ export class CrocodileGateway implements OnGatewayDisconnect {
 		const state = room.state;
 		const players = room.players;
 		const timerState = room.timerState;
+		const answer = userId === artistId ? room.answer : null;
 
-		return { _status: 'OK', userId, users, ownerId, drawEvents, artistId, state, players, timerState };
+		return { _status: 'OK', userId, users, ownerId, drawEvents, artistId, state, players, timerState, answer };
 	}
 
 	@SubscribeMessage('leaveRoom')
@@ -170,7 +193,7 @@ export class CrocodileGateway implements OnGatewayDisconnect {
 
 		const room = this.crocodileService.getRoom(roomId);
 
-		if (!room) return { _status: 'ERROR' };
+		if (!room || !room.isRunning || !room.hasPlayer(userId)) return { _status: 'ERROR' };
 
 		room.draw(drawEvents, userId);
 
@@ -205,5 +228,20 @@ export class CrocodileGateway implements OnGatewayDisconnect {
 		room.stop();
 
 		return { _status: 'OK' };
+	}
+
+	@SubscribeMessage('answer')
+	public answer(client: ClientSocket, answer: Payload<'answer'>): Response<'answer'> {
+		const { roomId, userId } = client.data;
+
+		if (!roomId || !userId || !answer) return { _status: 'ERROR' };
+
+		const room = this.crocodileService.getRoom(roomId);
+
+		if (!room || !room.isRunning || !room.hasPlayer(userId) || room.artist?.id === userId) return { _status: 'ERROR' };
+
+		const isRight = room.applyAnswer(answer, userId);
+
+		return { _status: 'OK', isRight };
 	}
 }
